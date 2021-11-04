@@ -49,6 +49,18 @@ import io.smallrye.openapi.runtime.scanner.OpenApiAnnotationScanner;
 @Mojo(name = "generate-schema", defaultPhase = LifecyclePhase.PROCESS_CLASSES, requiresDependencyCollection = ResolutionScope.COMPILE_PLUS_RUNTIME, requiresDependencyResolution = ResolutionScope.COMPILE_PLUS_RUNTIME, threadSafe = true)
 public class GenerateSchemaMojo extends AbstractMojo {
 
+    @Parameter(property = "schemas", required = true)
+    List<SchemaConfig> schemas;
+
+    @Parameter(defaultValue = "${project}", required = true)
+    private MavenProject mavenProject;
+
+    @Parameter(defaultValue = "false", property = "skip")
+    private boolean skip;
+
+    @Parameter(property = "project.compileClasspathElements", required = true, readonly = true)
+    private List<String> classpath;
+
     /**
      * Directory where to output the schemas.
      * If no path is specified, the schema will be printed to the log.
@@ -57,153 +69,46 @@ public class GenerateSchemaMojo extends AbstractMojo {
     private File outputDirectory;
 
     /**
-     * Filename of the schema
-     * Default to openapi. So the files created will be openapi.yaml and openapi.json.
-     */
-    @Parameter(defaultValue = "openapi", property = "schemaFilename")
-    private String schemaFilename;
-
-    /**
-     * When you include dependencies, we only look at compile and system scopes (by default)
-     * You can change that here.
-     * Valid options are: compile, provided, runtime, system, test, import
-     */
-    @Parameter(defaultValue = "compile,system", property = "includeDependenciesScopes")
-    private List<String> includeDependenciesScopes;
-
-    /**
-     * When you include dependencies, we only look at jars (by default)
-     * You can change that here.
-     */
-    @Parameter(defaultValue = "jar", property = "includeDependenciesTypes")
-    private List<String> includeDependenciesTypes;
-
-    @Parameter(defaultValue = "${project}", required = true)
-    private MavenProject mavenProject;
-
-    @Parameter(property = "project.compileClasspathElements", required = true, readonly = true)
-    private List<String> classpath;
-
-    @Parameter(defaultValue = "false", property = "skip")
-    private boolean skip;
-
-    /**
      * Compiled classes of the project.
      */
     @Parameter(defaultValue = "${project.build.outputDirectory}", property = "classesDir")
     private File classesDir;
 
-    @Parameter(property = "configProperties")
-    private File configProperties;
-
-    // Properies as per OpenAPI Config.
-
-    @Parameter(property = "modelReader")
-    private String modelReader;
-
-    @Parameter(property = "filter")
-    private String filter;
-
-    @Parameter(property = "scanDisabled")
-    private Boolean scanDisabled;
-
-    @Parameter(property = "scanPackages")
-    private String scanPackages;
-
-    @Parameter(property = "scanClasses")
-    private String scanClasses;
-
-    @Parameter(property = "scanExcludePackages")
-    private String scanExcludePackages;
-
-    @Parameter(property = "scanExcludeClasses")
-    private String scanExcludeClasses;
-
-    @Parameter(property = "servers")
-    private List<String> servers;
-
-    @Parameter(property = "pathServers")
-    private List<String> pathServers;
-
-    @Parameter(property = "operationServers")
-    private List<String> operationServers;
-
-    @Parameter(property = "scanDependenciesDisable")
-    private Boolean scanDependenciesDisable;
-
-    @Parameter(property = "scanDependenciesJars")
-    private List<String> scanDependenciesJars;
-
-    @Parameter(property = "schemaReferencesEnable")
-    private Boolean schemaReferencesEnable;
-
-    @Parameter(property = "customSchemaRegistryClass")
-    private String customSchemaRegistryClass;
-
-    @Parameter(property = "applicationPathDisable")
-    private Boolean applicationPathDisable;
-
-    @Parameter(property = "openApiVersion")
-    private String openApiVersion;
-
-    @Parameter(property = "infoTitle")
-    private String infoTitle;
-
-    @Parameter(property = "infoVersion")
-    private String infoVersion;
-
-    @Parameter(property = "infoDescription")
-    private String infoDescription;
-
-    @Parameter(property = "infoTermsOfService")
-    private String infoTermsOfService;
-
-    @Parameter(property = "infoContactEmail")
-    private String infoContactEmail;
-
-    @Parameter(property = "infoContactName")
-    private String infoContactName;
-
-    @Parameter(property = "infoContactUrl")
-    private String infoContactUrl;
-
-    @Parameter(property = "infoLicenseName")
-    private String infoLicenseName;
-
-    @Parameter(property = "infoLicenseUrl")
-    private String infoLicenseUrl;
-
-    @Parameter(property = "operationIdStrategy")
-    private String operationIdStrategy;
+    private IndexView cached = null;
 
     @Override
     public void execute() throws MojoExecutionException {
         if (!skip) {
-            try {
-                IndexView index = createIndex();
-                OpenApiDocument schema = generateSchema(index);
-                write(schema);
-            } catch (IOException ex) {
-                getLog().error(ex);
-                throw new MojoExecutionException("Could not generate OpenAPI Schema", ex); // TODO allow failOnError = false ?
+            for (SchemaConfig schemaConfig : schemas) {
+                try {
+
+                    if (cached == null) {
+                        cached = createIndex(schemaConfig);
+                    }
+                    OpenApiDocument schema = generateSchema(cached, schemaConfig);
+                    write(schema, schemaConfig);
+                } catch (IOException ex) {
+                    getLog().error(ex);
+                    throw new MojoExecutionException("Could not generate OpenAPI Schema", ex); // TODO allow failOnError = false ?
+                }
             }
         }
     }
 
-    private IndexView createIndex() throws MojoExecutionException {
+    private IndexView createIndex(SchemaConfig schemaConfig) throws MojoExecutionException {
         IndexView moduleIndex;
         try {
             moduleIndex = indexModuleClasses();
         } catch (IOException e) {
             throw new MojoExecutionException("Can't compute index", e);
         }
-        if (!scanDependenciesDisable()) {
+        if (!scanDependenciesDisable(schemaConfig)) {
             List<IndexView> indexes = new ArrayList<>();
             indexes.add(moduleIndex);
             for (Object a : mavenProject.getArtifacts()) {
                 Artifact artifact = (Artifact) a;
-                if (includeDependenciesScopes.contains(artifact.getScope())
-                        && includeDependenciesTypes.contains(artifact.getType())) {
+                if (schemaConfig.getIncludeDependenciesScopes().contains(artifact.getScope())
+                        && schemaConfig.getIncludeDependenciesTypes().contains(artifact.getType())) {
                     try {
                         Result result = JarIndexer.createJarIndex(artifact.getFile(), new Indexer(),
                                 false, false, false);
@@ -219,11 +124,11 @@ public class GenerateSchemaMojo extends AbstractMojo {
         }
     }
 
-    private boolean scanDependenciesDisable() {
-        if (scanDependenciesDisable == null) {
+    private boolean scanDependenciesDisable(SchemaConfig schemaConfig) {
+        if (schemaConfig.getScanDependenciesDisable() == null) {
             return false;
         }
-        return scanDependenciesDisable;
+        return schemaConfig.getScanDependenciesDisable();
     }
 
     // index the classes of this Maven module
@@ -242,13 +147,13 @@ public class GenerateSchemaMojo extends AbstractMojo {
         return indexer.complete();
     }
 
-    private OpenApiDocument generateSchema(IndexView index) throws IOException {
-        OpenApiConfig openApiConfig = new MavenConfig(getProperties());
+    private OpenApiDocument generateSchema(IndexView index, SchemaConfig schemaConfig) throws IOException {
+        OpenApiConfig openApiConfig = new MavenConfig(getProperties(schemaConfig));
 
         OpenAPI staticModel = generateStaticModel();
         OpenAPI annotationModel = generateAnnotationModel(index, openApiConfig);
 
-        ClassLoader classLoader = getClassLoader();
+        ClassLoader classLoader = getClassLoader(schemaConfig);
 
         OpenAPI readerModel = OpenApiProcessor.modelFromReader(openApiConfig, classLoader);
 
@@ -272,7 +177,7 @@ public class GenerateSchemaMojo extends AbstractMojo {
         return document;
     }
 
-    private ClassLoader getClassLoader() throws MalformedURLException {
+    private ClassLoader getClassLoader(SchemaConfig schemaConfig) throws MalformedURLException {
         Set<URL> urls = new HashSet<>();
 
         for (String element : classpath) {
@@ -340,12 +245,12 @@ public class GenerateSchemaMojo extends AbstractMojo {
         return Format.YAML;
     }
 
-    private Map<String, String> getProperties() throws IOException {
+    private Map<String, String> getProperties(SchemaConfig schemaConfig) throws IOException {
         // First check if the configProperties is set, if so, load that.
         Map<String, String> cp = new HashMap<>();
-        if (configProperties != null && configProperties.exists()) {
+        if (schemaConfig.getConfigProperties() != null && schemaConfig.getConfigProperties().exists()) {
             Properties p = new Properties();
-            try (InputStream is = Files.newInputStream(configProperties.toPath())) {
+            try (InputStream is = Files.newInputStream(schemaConfig.getConfigProperties().toPath())) {
                 p.load(is);
                 cp.putAll((Map) p);
             }
@@ -353,31 +258,32 @@ public class GenerateSchemaMojo extends AbstractMojo {
 
         // Now add properties set in the maven plugin.
 
-        addToPropertyMap(cp, OASConfig.MODEL_READER, modelReader);
-        addToPropertyMap(cp, OASConfig.FILTER, filter);
-        addToPropertyMap(cp, OASConfig.SCAN_DISABLE, scanDisabled);
-        addToPropertyMap(cp, OASConfig.SCAN_PACKAGES, scanPackages);
-        addToPropertyMap(cp, OASConfig.SCAN_CLASSES, scanClasses);
-        addToPropertyMap(cp, OASConfig.SCAN_EXCLUDE_PACKAGES, scanExcludePackages);
-        addToPropertyMap(cp, OASConfig.SCAN_EXCLUDE_CLASSES, scanExcludeClasses);
-        addToPropertyMap(cp, OASConfig.SERVERS, servers);
-        addToPropertyMap(cp, OASConfig.SERVERS_PATH_PREFIX, pathServers);
-        addToPropertyMap(cp, OASConfig.SERVERS_OPERATION_PREFIX, operationServers);
-        addToPropertyMap(cp, OpenApiConstants.SMALLRYE_SCAN_DEPENDENCIES_DISABLE, scanDependenciesDisable);
-        addToPropertyMap(cp, OpenApiConstants.SMALLRYE_SCAN_DEPENDENCIES_JARS, scanDependenciesJars);
-        addToPropertyMap(cp, OpenApiConstants.SMALLRYE_CUSTOM_SCHEMA_REGISTRY_CLASS, customSchemaRegistryClass);
-        addToPropertyMap(cp, OpenApiConstants.SMALLRYE_APP_PATH_DISABLE, applicationPathDisable);
-        addToPropertyMap(cp, OpenApiConstants.VERSION, openApiVersion);
-        addToPropertyMap(cp, OpenApiConstants.INFO_TITLE, infoTitle);
-        addToPropertyMap(cp, OpenApiConstants.INFO_VERSION, infoVersion);
-        addToPropertyMap(cp, OpenApiConstants.INFO_DESCRIPTION, infoDescription);
-        addToPropertyMap(cp, OpenApiConstants.INFO_TERMS, infoTermsOfService);
-        addToPropertyMap(cp, OpenApiConstants.INFO_CONTACT_EMAIL, infoContactEmail);
-        addToPropertyMap(cp, OpenApiConstants.INFO_CONTACT_NAME, infoContactName);
-        addToPropertyMap(cp, OpenApiConstants.INFO_CONTACT_URL, infoContactUrl);
-        addToPropertyMap(cp, OpenApiConstants.INFO_LICENSE_NAME, infoLicenseName);
-        addToPropertyMap(cp, OpenApiConstants.INFO_LICENSE_URL, infoLicenseUrl);
-        addToPropertyMap(cp, OpenApiConstants.OPERATION_ID_STRAGEGY, operationIdStrategy);
+        addToPropertyMap(cp, OASConfig.MODEL_READER, schemaConfig.getModelReader());
+        addToPropertyMap(cp, OASConfig.FILTER, schemaConfig.getFilter());
+        addToPropertyMap(cp, OASConfig.SCAN_DISABLE, schemaConfig.getScanDisabled());
+        addToPropertyMap(cp, OASConfig.SCAN_PACKAGES, schemaConfig.getScanPackages());
+        addToPropertyMap(cp, OASConfig.SCAN_CLASSES, schemaConfig.getScanClasses());
+        addToPropertyMap(cp, OASConfig.SCAN_EXCLUDE_PACKAGES, schemaConfig.getScanExcludePackages());
+        addToPropertyMap(cp, OASConfig.SCAN_EXCLUDE_CLASSES, schemaConfig.getScanExcludeClasses());
+        addToPropertyMap(cp, OASConfig.SERVERS, schemaConfig.getServers());
+        addToPropertyMap(cp, OASConfig.SERVERS_PATH_PREFIX, schemaConfig.getPathServers());
+        addToPropertyMap(cp, OASConfig.SERVERS_OPERATION_PREFIX, schemaConfig.getOperationServers());
+        addToPropertyMap(cp, OpenApiConstants.SMALLRYE_SCAN_DEPENDENCIES_DISABLE, schemaConfig.getScanDependenciesDisable());
+        addToPropertyMap(cp, OpenApiConstants.SMALLRYE_SCAN_DEPENDENCIES_JARS, schemaConfig.getScanDependenciesJars());
+        addToPropertyMap(cp, OpenApiConstants.SMALLRYE_CUSTOM_SCHEMA_REGISTRY_CLASS,
+                schemaConfig.getCustomSchemaRegistryClass());
+        addToPropertyMap(cp, OpenApiConstants.SMALLRYE_APP_PATH_DISABLE, schemaConfig.getApplicationPathDisable());
+        addToPropertyMap(cp, OpenApiConstants.VERSION, schemaConfig.getOpenApiVersion());
+        addToPropertyMap(cp, OpenApiConstants.INFO_TITLE, schemaConfig.getInfoTitle());
+        addToPropertyMap(cp, OpenApiConstants.INFO_VERSION, schemaConfig.getInfoVersion());
+        addToPropertyMap(cp, OpenApiConstants.INFO_DESCRIPTION, schemaConfig.getInfoDescription());
+        addToPropertyMap(cp, OpenApiConstants.INFO_TERMS, schemaConfig.getInfoTermsOfService());
+        addToPropertyMap(cp, OpenApiConstants.INFO_CONTACT_EMAIL, schemaConfig.getInfoContactEmail());
+        addToPropertyMap(cp, OpenApiConstants.INFO_CONTACT_NAME, schemaConfig.getInfoContactName());
+        addToPropertyMap(cp, OpenApiConstants.INFO_CONTACT_URL, schemaConfig.getInfoContactUrl());
+        addToPropertyMap(cp, OpenApiConstants.INFO_LICENSE_NAME, schemaConfig.getInfoLicenseName());
+        addToPropertyMap(cp, OpenApiConstants.INFO_LICENSE_URL, schemaConfig.getInfoLicenseUrl());
+        addToPropertyMap(cp, OpenApiConstants.OPERATION_ID_STRAGEGY, schemaConfig.getOperationIdStrategy());
 
         return cp;
     }
@@ -400,7 +306,7 @@ public class GenerateSchemaMojo extends AbstractMojo {
         }
     }
 
-    private void write(OpenApiDocument schema) throws MojoExecutionException {
+    private void write(OpenApiDocument schema, SchemaConfig schemaConfig) throws MojoExecutionException {
         try {
             String yaml = OpenApiSerializer.serialize(schema.get(), Format.YAML);
             String json = OpenApiSerializer.serialize(schema.get(), Format.JSON);
@@ -413,8 +319,8 @@ public class GenerateSchemaMojo extends AbstractMojo {
                     Files.createDirectories(directory);
                 }
 
-                writeSchemaFile(directory, schemaFilename + ".yaml", yaml.getBytes());
-                writeSchemaFile(directory, schemaFilename + ".json", json.getBytes());
+                writeSchemaFile(directory, schemaConfig.getSchemaFilename() + ".yaml", yaml.getBytes());
+                writeSchemaFile(directory, schemaConfig.getSchemaFilename() + ".json", json.getBytes());
 
                 getLog().info("Wrote the schema files to " + outputDirectory.getAbsolutePath());
             }
