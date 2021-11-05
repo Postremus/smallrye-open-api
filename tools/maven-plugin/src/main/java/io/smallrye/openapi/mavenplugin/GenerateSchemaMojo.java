@@ -1,6 +1,9 @@
 package io.smallrye.openapi.mavenplugin;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.MalformedURLException;
@@ -32,7 +35,9 @@ import org.eclipse.microprofile.openapi.OASConfig;
 import org.eclipse.microprofile.openapi.models.OpenAPI;
 import org.jboss.jandex.CompositeIndex;
 import org.jboss.jandex.Index;
+import org.jboss.jandex.IndexReader;
 import org.jboss.jandex.IndexView;
+import org.jboss.jandex.IndexWriter;
 import org.jboss.jandex.Indexer;
 import org.jboss.jandex.JarIndexer;
 import org.jboss.jandex.Result;
@@ -205,15 +210,42 @@ public class GenerateSchemaMojo extends AbstractMojo {
                 if (includeDependenciesScopes.contains(artifact.getScope())
                         && includeDependenciesTypes.contains(artifact.getType())) {
                     try {
-                        Result result = JarIndexer.createJarIndex(artifact.getFile(), new Indexer(),
-                                false, false, false);
-                        indexes.add(result.getIndex());
+                        File idxFile = new File(outputDirectory, artifact.getFile().getName() + ".idx");
+
+                        if (idxFile.exists()) {
+                            FileInputStream input = new FileInputStream(idxFile);
+                            IndexReader reader = new IndexReader(input);
+                            try {
+                                indexes.add(reader.read());
+                            } finally {
+                                input.close();
+                            }
+                        } else {
+                            Result result = JarIndexer.createJarIndex(artifact.getFile(), new Indexer(),
+                                    false, false, false);
+
+                            FileOutputStream out = null;
+                            try {
+                                outputDirectory.mkdirs();
+                                idxFile.createNewFile();
+                                out = new FileOutputStream(idxFile);
+                                IndexWriter writer = new IndexWriter(out);
+                                writer.write(result.getIndex());
+                            } catch (FileNotFoundException e) {
+                                e.printStackTrace();
+                            } finally {
+                                //out.close();
+                            }
+                            indexes.add(result.getIndex());
+                        }
                     } catch (Exception e) {
                         getLog().error("Can't compute index of " + artifact.getFile().getAbsolutePath() + ", skipping", e);
                     }
                 }
             }
-            return CompositeIndex.create(indexes);
+
+            CompositeIndex compositeIndex = CompositeIndex.create(indexes);
+            return compositeIndex;
         } else {
             return moduleIndex;
         }
