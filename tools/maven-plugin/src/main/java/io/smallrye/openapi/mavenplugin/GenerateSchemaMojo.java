@@ -10,7 +10,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -18,11 +17,10 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
-import org.apache.maven.artifact.Artifact;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
+import org.apache.maven.plugins.annotations.Component;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
@@ -30,12 +28,7 @@ import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
 import org.eclipse.microprofile.openapi.OASConfig;
 import org.eclipse.microprofile.openapi.models.OpenAPI;
-import org.jboss.jandex.CompositeIndex;
-import org.jboss.jandex.Index;
 import org.jboss.jandex.IndexView;
-import org.jboss.jandex.Indexer;
-import org.jboss.jandex.JarIndexer;
-import org.jboss.jandex.Result;
 
 import io.smallrye.openapi.api.OpenApiConfig;
 import io.smallrye.openapi.api.OpenApiDocument;
@@ -62,21 +55,6 @@ public class GenerateSchemaMojo extends AbstractMojo {
      */
     @Parameter(defaultValue = "openapi", property = "schemaFilename")
     private String schemaFilename;
-
-    /**
-     * When you include dependencies, we only look at compile and system scopes (by default)
-     * You can change that here.
-     * Valid options are: compile, provided, runtime, system, test, import
-     */
-    @Parameter(defaultValue = "compile,system", property = "includeDependenciesScopes")
-    private List<String> includeDependenciesScopes;
-
-    /**
-     * When you include dependencies, we only look at jars (by default)
-     * You can change that here.
-     */
-    @Parameter(defaultValue = "jar", property = "includeDependenciesTypes")
-    private List<String> includeDependenciesTypes;
 
     @Parameter(defaultValue = "${project}", required = true)
     private MavenProject mavenProject;
@@ -128,9 +106,6 @@ public class GenerateSchemaMojo extends AbstractMojo {
     @Parameter(property = "operationServers")
     private List<String> operationServers;
 
-    @Parameter(property = "scanDependenciesDisable")
-    private Boolean scanDependenciesDisable;
-
     @Parameter(property = "scanDependenciesJars")
     private List<String> scanDependenciesJars;
 
@@ -176,11 +151,33 @@ public class GenerateSchemaMojo extends AbstractMojo {
     @Parameter(property = "operationIdStrategy")
     private String operationIdStrategy;
 
+    @Parameter(property = "scanDependenciesDisable")
+    private Boolean scanDependenciesDisable;
+
+    /**
+     * When you include dependencies, we only look at compile and system scopes (by default)
+     * You can change that here.
+     * Valid options are: compile, provided, runtime, system, test, import
+     */
+    @Parameter(defaultValue = "compile,system", property = "includeDependenciesScopes")
+    private List<String> includeDependenciesScopes;
+
+    /**
+     * When you include dependencies, we only look at jars (by default)
+     * You can change that here.
+     */
+    @Parameter(defaultValue = "jar", property = "includeDependenciesTypes")
+    private List<String> includeDependenciesTypes;
+
+    @Component
+    private MavenDependencyIndexCreator mavenDependencyIndexCreator;
+
     @Override
     public void execute() throws MojoExecutionException {
         if (!skip) {
             try {
-                IndexView index = createIndex();
+                IndexView index = mavenDependencyIndexCreator.createIndex(mavenProject, classesDir, scanDependenciesDisable,
+                        includeDependenciesScopes, includeDependenciesTypes);
                 OpenApiDocument schema = generateSchema(index);
                 write(schema);
             } catch (IOException ex) {
@@ -188,58 +185,6 @@ public class GenerateSchemaMojo extends AbstractMojo {
                 throw new MojoExecutionException("Could not generate OpenAPI Schema", ex); // TODO allow failOnError = false ?
             }
         }
-    }
-
-    private IndexView createIndex() throws MojoExecutionException {
-        IndexView moduleIndex;
-        try {
-            moduleIndex = indexModuleClasses();
-        } catch (IOException e) {
-            throw new MojoExecutionException("Can't compute index", e);
-        }
-        if (!scanDependenciesDisable()) {
-            List<IndexView> indexes = new ArrayList<>();
-            indexes.add(moduleIndex);
-            for (Object a : mavenProject.getArtifacts()) {
-                Artifact artifact = (Artifact) a;
-                if (includeDependenciesScopes.contains(artifact.getScope())
-                        && includeDependenciesTypes.contains(artifact.getType())) {
-                    try {
-                        Result result = JarIndexer.createJarIndex(artifact.getFile(), new Indexer(),
-                                false, false, false);
-                        indexes.add(result.getIndex());
-                    } catch (Exception e) {
-                        getLog().error("Can't compute index of " + artifact.getFile().getAbsolutePath() + ", skipping", e);
-                    }
-                }
-            }
-            return CompositeIndex.create(indexes);
-        } else {
-            return moduleIndex;
-        }
-    }
-
-    private boolean scanDependenciesDisable() {
-        if (scanDependenciesDisable == null) {
-            return false;
-        }
-        return scanDependenciesDisable;
-    }
-
-    // index the classes of this Maven module
-    private Index indexModuleClasses() throws IOException {
-        Indexer indexer = new Indexer();
-
-        try (Stream<Path> stream = Files.walk(classesDir.toPath())) {
-
-            List<Path> classFiles = stream
-                    .filter(path -> path.toString().endsWith(".class"))
-                    .collect(Collectors.toList());
-            for (Path path : classFiles) {
-                indexer.index(Files.newInputStream(path));
-            }
-        }
-        return indexer.complete();
     }
 
     private OpenApiDocument generateSchema(IndexView index) throws IOException {
