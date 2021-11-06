@@ -1,8 +1,6 @@
 package io.smallrye.openapi.mavenplugin;
 
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -25,9 +23,7 @@ import org.codehaus.plexus.component.annotations.Requirement;
 import org.codehaus.plexus.logging.Logger;
 import org.jboss.jandex.CompositeIndex;
 import org.jboss.jandex.Index;
-import org.jboss.jandex.IndexReader;
 import org.jboss.jandex.IndexView;
-import org.jboss.jandex.IndexWriter;
 import org.jboss.jandex.Indexer;
 import org.jboss.jandex.JarIndexer;
 import org.jboss.jandex.Result;
@@ -37,6 +33,8 @@ public class MavenDependencyIndexCreator {
 
     private static final Set<String> IGNORED_GROUPIDS = new HashSet<>();
     private static final Set<String> IGNORED_GROUPID_ARTIFACTID = new HashSet<>();
+
+    private CompositeIndex cached;
 
     static {
         IGNORED_GROUPID_ARTIFACTID.add("org.graalvm.sdk:graal-sdk");
@@ -86,7 +84,9 @@ public class MavenDependencyIndexCreator {
         if (scanDependenciesDisable != null && !scanDependenciesDisable) {
             return moduleIndex;
         }
-
+        if (cached != null) {
+            return cached;
+        }
         List<IndexView> indexes = new ArrayList<>();
         indexes.add(moduleIndex);
         List<Map.Entry<Artifact, Duration>> durations = new ArrayList<>();
@@ -99,18 +99,10 @@ public class MavenDependencyIndexCreator {
 
                 LocalDateTime start = LocalDateTime.now();
 
-                Index index = readCachedIndex(artifact, new File(mavenProject.getBasedir(), "target"));
-                if (index != null) {
-                    indexes.add(index);
-                    continue;
-                }
-
                 try {
                     Result result = JarIndexer.createJarIndex(artifact.getFile(), new Indexer(),
                             false, false, false);
                     indexes.add(result.getIndex());
-
-                    cacheIndex(result.getIndex(), artifact, new File(mavenProject.getBasedir(), "target"));
                 } catch (Exception e) {
                     logger.error("Can't compute index of " + artifact.getFile().getAbsolutePath() + ", skipping", e);
                 }
@@ -128,7 +120,9 @@ public class MavenDependencyIndexCreator {
             });
         }
 
-        return CompositeIndex.create(indexes);
+        CompositeIndex compositeIndex = CompositeIndex.create(indexes);
+        cached = compositeIndex;
+        return compositeIndex;
     }
 
     // index the classes of this Maven module
@@ -145,43 +139,5 @@ public class MavenDependencyIndexCreator {
             }
         }
         return indexer.complete();
-    }
-
-    private Index readCachedIndex(Artifact artifact, File outputDirectory) {
-        if (false) {
-            return null;
-        }
-        File idxFile = new File(outputDirectory, artifact.getGroupId() + "_" + artifact.getArtifactId() + "_"
-                + artifact.getVersion() + "_" + artifact.getClassifier() + ".idx");
-        if (!idxFile.exists()) {
-            return null;
-        }
-        try (FileInputStream input = new FileInputStream(idxFile)) {
-            IndexReader reader = new IndexReader(input);
-            return reader.read();
-        } catch (IOException e) {
-            logger.debug("Could not read cached index, computing new one.", e);
-        }
-        return null;
-    }
-
-    private void cacheIndex(Index index, Artifact artifact, File outputDirectory) {
-        if (false) {
-            return;
-        }
-        File idxFile = new File(outputDirectory, artifact.getGroupId() + "_" + artifact.getArtifactId() + "_"
-                + artifact.getVersion() + "_" + artifact.getClassifier() + ".idx");
-        outputDirectory.mkdirs();
-        try {
-            idxFile.createNewFile();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        try (FileOutputStream out = new FileOutputStream(idxFile)) {
-            IndexWriter writer = new IndexWriter(out);
-            writer.write(index);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
     }
 }
