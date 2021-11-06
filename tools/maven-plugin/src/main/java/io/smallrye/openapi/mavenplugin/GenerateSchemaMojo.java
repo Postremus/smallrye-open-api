@@ -18,6 +18,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.apache.maven.artifact.DependencyResolutionRequiredException;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugins.annotations.Component;
@@ -42,6 +43,9 @@ import io.smallrye.openapi.runtime.scanner.OpenApiAnnotationScanner;
 @Mojo(name = "generate-schema", defaultPhase = LifecyclePhase.PROCESS_CLASSES, requiresDependencyCollection = ResolutionScope.COMPILE_PLUS_RUNTIME, requiresDependencyResolution = ResolutionScope.COMPILE_PLUS_RUNTIME)
 public class GenerateSchemaMojo extends AbstractMojo {
 
+    @Parameter(defaultValue = "${project}", required = true)
+    private MavenProject mavenProject;
+
     /**
      * Directory where to output the schemas.
      * If no path is specified, the schema will be printed to the log.
@@ -56,20 +60,8 @@ public class GenerateSchemaMojo extends AbstractMojo {
     @Parameter(defaultValue = "openapi", property = "schemaFilename")
     private String schemaFilename;
 
-    @Parameter(defaultValue = "${project}", required = true)
-    private MavenProject mavenProject;
-
-    @Parameter(property = "project.compileClasspathElements", required = true, readonly = true)
-    private List<String> classpath;
-
     @Parameter(defaultValue = "false", property = "skip")
     private boolean skip;
-
-    /**
-     * Compiled classes of the project.
-     */
-    @Parameter(defaultValue = "${project.build.outputDirectory}", property = "classesDir")
-    private File classesDir;
 
     @Parameter(property = "configProperties")
     private File configProperties;
@@ -176,18 +168,18 @@ public class GenerateSchemaMojo extends AbstractMojo {
     public void execute() throws MojoExecutionException {
         if (!skip) {
             try {
-                IndexView index = mavenDependencyIndexCreator.createIndex(mavenProject, classesDir, scanDependenciesDisable,
+                IndexView index = mavenDependencyIndexCreator.createIndex(mavenProject, scanDependenciesDisable,
                         includeDependenciesScopes, includeDependenciesTypes);
                 OpenApiDocument schema = generateSchema(index);
                 write(schema);
-            } catch (IOException ex) {
+            } catch (IOException | DependencyResolutionRequiredException ex) {
                 getLog().error(ex);
                 throw new MojoExecutionException("Could not generate OpenAPI Schema", ex); // TODO allow failOnError = false ?
             }
         }
     }
 
-    private OpenApiDocument generateSchema(IndexView index) throws IOException {
+    private OpenApiDocument generateSchema(IndexView index) throws IOException, DependencyResolutionRequiredException {
         OpenApiConfig openApiConfig = new MavenConfig(getProperties());
 
         OpenAPI staticModel = generateStaticModel();
@@ -217,10 +209,9 @@ public class GenerateSchemaMojo extends AbstractMojo {
         return document;
     }
 
-    private ClassLoader getClassLoader() throws MalformedURLException {
+    private ClassLoader getClassLoader() throws MalformedURLException, DependencyResolutionRequiredException {
         Set<URL> urls = new HashSet<>();
-
-        for (String element : classpath) {
+        for (String element : mavenProject.getCompileClasspathElements()) {
             urls.add(new File(element).toURI().toURL());
         }
 
@@ -247,7 +238,7 @@ public class GenerateSchemaMojo extends AbstractMojo {
     }
 
     private Path getStaticFile() {
-        Path classesPath = classesDir.toPath();
+        Path classesPath = new File(mavenProject.getBuild().getOutputDirectory()).toPath();
 
         if (Files.exists(classesPath)) {
             Path resourcePath = Paths.get(classesPath.toString(), META_INF_OPENAPI_YAML);

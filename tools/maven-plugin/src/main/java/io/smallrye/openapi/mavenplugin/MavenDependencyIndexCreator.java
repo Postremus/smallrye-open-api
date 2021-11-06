@@ -72,11 +72,11 @@ public class MavenDependencyIndexCreator {
     @Requirement
     private Logger logger;
 
-    public IndexView createIndex(MavenProject mavenProject, File classesDir, Boolean scanDependenciesDisable,
+    public IndexView createIndex(MavenProject mavenProject, Boolean scanDependenciesDisable,
             List<String> includeDependenciesScopes, List<String> includeDependenciesTypes) throws MojoExecutionException {
         IndexView moduleIndex;
         try {
-            moduleIndex = indexModuleClasses(classesDir);
+            moduleIndex = indexModuleClasses(mavenProject);
         } catch (IOException e) {
             throw new MojoExecutionException("Can't compute index", e);
         }
@@ -126,10 +126,10 @@ public class MavenDependencyIndexCreator {
     }
 
     // index the classes of this Maven module
-    private Index indexModuleClasses(File classesDir) throws IOException {
+    private Index indexModuleClasses(MavenProject mavenProject) throws IOException {
         Indexer indexer = new Indexer();
 
-        try (Stream<Path> stream = Files.walk(classesDir.toPath())) {
+        try (Stream<Path> stream = Files.walk(new File(mavenProject.getBuild().getOutputDirectory()).toPath())) {
 
             List<Path> classFiles = stream
                     .filter(path -> path.toString().endsWith(".class"))
