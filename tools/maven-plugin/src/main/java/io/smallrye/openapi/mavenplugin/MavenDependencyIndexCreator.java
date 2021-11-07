@@ -42,22 +42,18 @@ public class MavenDependencyIndexCreator {
 
     static {
         IGNORED_GROUPID_ARTIFACTID.add("org.graalvm.sdk:graal-sdk");
-        IGNORED_GROUPID_ARTIFACTID.add("io.quarkus:quarkus-core");
         IGNORED_GROUPID_ARTIFACTID.add("org.yaml:snakeyaml");
         IGNORED_GROUPID_ARTIFACTID.add("org.wildfly.common:wildfly-common");
-        IGNORED_GROUPID_ARTIFACTID.add("org.apache.httpcomponents:httpcore");
         IGNORED_GROUPID_ARTIFACTID.add("com.fasterxml.jackson.core:jackson-core");
-        IGNORED_GROUPID_ARTIFACTID.add("org.apache.httpcomponents:httpcore-nio");
+        IGNORED_GROUPID_ARTIFACTID.add("com.fasterxml.jackson.core:jackson-databind");
         IGNORED_GROUPID_ARTIFACTID.add("io.quarkus:quarkus-vertx-http");
         IGNORED_GROUPID_ARTIFACTID.add("io.smallrye:smallrye-open-api-core");
         IGNORED_GROUPID_ARTIFACTID.add("io.smallrye.reactive:smallrye-mutiny-vertx-core");
         IGNORED_GROUPID_ARTIFACTID.add("commons-io:commons-io");
-        IGNORED_GROUPID_ARTIFACTID.add("org.apache.httpcomponents:httpclient");
         IGNORED_GROUPID_ARTIFACTID.add("io.smallrye.reactive:mutiny");
         IGNORED_GROUPID_ARTIFACTID.add("org.jboss.narayana.jta:narayana-jta");
         IGNORED_GROUPID_ARTIFACTID.add("org.glassfish.jaxb:jaxb-runtime");
         IGNORED_GROUPID_ARTIFACTID.add("com.github.ben-manes.caffeine:caffeine");
-        IGNORED_GROUPID_ARTIFACTID.add("com.fasterxml.jackson.core:jackson-databind");
         IGNORED_GROUPID_ARTIFACTID.add("org.hibernate.validator:hibernate-validator");
         IGNORED_GROUPID_ARTIFACTID.add("io.smallrye.config:smallrye-config-core");
         IGNORED_GROUPID_ARTIFACTID.add("com.thoughtworks.xstream:xstream");
@@ -72,6 +68,7 @@ public class MavenDependencyIndexCreator {
         IGNORED_GROUPIDS.add("org.hibernate");
         IGNORED_GROUPIDS.add("org.kie");
         IGNORED_GROUPIDS.add("org.postgresql");
+        IGNORED_GROUPIDS.add("org.apache.httpcomponents");
     }
 
     @Requirement
@@ -80,9 +77,9 @@ public class MavenDependencyIndexCreator {
     public IndexView createIndex(MavenProject mavenProject, Boolean scanDependenciesDisable,
             List<String> includeDependenciesScopes, List<String> includeDependenciesTypes) throws Exception {
 
-        List<Map.Entry<Artifact, Duration>> durations = new ArrayList<>();
+        List<Map.Entry<Artifact, Duration>> indexDurations = new ArrayList<>();
 
-        IndexView moduleIndex = timeAndCache(durations, mavenProject.getArtifact(), () -> {
+        IndexView moduleIndex = timeAndCache(indexDurations, mavenProject.getArtifact(), () -> {
             try {
                 return indexModuleClasses(mavenProject);
             } catch (IOException e) {
@@ -101,7 +98,7 @@ public class MavenDependencyIndexCreator {
                 continue;
             }
 
-            IndexView artifactIndex = timeAndCache(durations, artifact, () -> {
+            IndexView artifactIndex = timeAndCache(indexDurations, artifact, () -> {
                 try {
                     Result result = JarIndexer.createJarIndex(artifact.getFile(), new Indexer(),
                             false, false, false);
@@ -117,17 +114,21 @@ public class MavenDependencyIndexCreator {
             }
         }
 
-        if (logger.isDebugEnabled()) {
-            durations.sort(Map.Entry.comparingByValue());
+        printIndexDurations(indexDurations);
 
-            durations.forEach(e -> {
+        return CompositeIndex.create(indexes);
+    }
+
+    private void printIndexDurations(List<Map.Entry<Artifact, Duration>> indexDurations) {
+        if (logger.isDebugEnabled()) {
+            indexDurations.sort(Map.Entry.comparingByValue());
+
+            indexDurations.forEach(e -> {
                 if (!e.getValue().isZero()) {
                     logger.debug(buildGAVCTString(e.getKey()) + " " + e.getValue());
                 }
             });
         }
-
-        return CompositeIndex.create(indexes);
     }
 
     private boolean isIgnored(Artifact artifact, List<String> includeDependenciesScopes,
