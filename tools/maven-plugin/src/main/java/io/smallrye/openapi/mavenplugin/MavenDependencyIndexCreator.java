@@ -59,8 +59,6 @@ public class MavenDependencyIndexCreator {
                     try {
                         Result result = JarIndexer.createJarIndex(artifact.getFile(), new Indexer(),
                                 false, false, false);
-                        indexes.add(result.getIndex());
-
                         return result.getIndex();
                     } catch (Exception e) {
                         logger.error("Can't compute index of " + artifact.getFile().getAbsolutePath() + ", skipping", e);
