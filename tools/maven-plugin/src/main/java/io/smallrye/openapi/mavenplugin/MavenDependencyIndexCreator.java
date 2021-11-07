@@ -138,14 +138,14 @@ public class MavenDependencyIndexCreator {
                 || ignoredArtifacts.contains(artifact.getGroupId() + ":" + artifact.getArtifactId());
     }
 
-    private IndexView timeAndCache(List<Map.Entry<Artifact, Duration>> durations, Artifact artifact,
+    private IndexView timeAndCache(List<Map.Entry<Artifact, Duration>> indexDurations, Artifact artifact,
             Callable<IndexView> callable) throws Exception {
         LocalDateTime start = LocalDateTime.now();
         IndexView result = indexCache.get(buildGAVCTString(artifact), callable);
         LocalDateTime end = LocalDateTime.now();
 
         Duration duration = Duration.between(start, end);
-        durations.add(new AbstractMap.SimpleEntry<>(artifact, duration));
+        indexDurations.add(new AbstractMap.SimpleEntry<>(artifact, duration));
 
         return result;
     }
