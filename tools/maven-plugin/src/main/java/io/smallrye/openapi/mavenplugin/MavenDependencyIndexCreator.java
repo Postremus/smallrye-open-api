@@ -37,42 +37,41 @@ public class MavenDependencyIndexCreator {
 
     private final Cache<String, IndexView> indexCache = CacheBuilder.newBuilder().build();
 
-    private static final Set<String> IGNORED_GROUPIDS = new HashSet<>();
-    private static final Set<String> IGNORED_GROUPID_ARTIFACTID = new HashSet<>();
-
-    static {
-        IGNORED_GROUPID_ARTIFACTID.add("org.graalvm.sdk:graal-sdk");
-        IGNORED_GROUPID_ARTIFACTID.add("org.yaml:snakeyaml");
-        IGNORED_GROUPID_ARTIFACTID.add("org.wildfly.common:wildfly-common");
-        IGNORED_GROUPID_ARTIFACTID.add("com.fasterxml.jackson.core:jackson-core");
-        IGNORED_GROUPID_ARTIFACTID.add("com.fasterxml.jackson.core:jackson-databind");
-        IGNORED_GROUPID_ARTIFACTID.add("io.quarkus:quarkus-vertx-http");
-        IGNORED_GROUPID_ARTIFACTID.add("io.smallrye:smallrye-open-api-core");
-        IGNORED_GROUPID_ARTIFACTID.add("io.smallrye.reactive:smallrye-mutiny-vertx-core");
-        IGNORED_GROUPID_ARTIFACTID.add("commons-io:commons-io");
-        IGNORED_GROUPID_ARTIFACTID.add("io.smallrye.reactive:mutiny");
-        IGNORED_GROUPID_ARTIFACTID.add("org.jboss.narayana.jta:narayana-jta");
-        IGNORED_GROUPID_ARTIFACTID.add("org.glassfish.jaxb:jaxb-runtime");
-        IGNORED_GROUPID_ARTIFACTID.add("com.github.ben-manes.caffeine:caffeine");
-        IGNORED_GROUPID_ARTIFACTID.add("org.hibernate.validator:hibernate-validator");
-        IGNORED_GROUPID_ARTIFACTID.add("io.smallrye.config:smallrye-config-core");
-        IGNORED_GROUPID_ARTIFACTID.add("com.thoughtworks.xstream:xstream");
-        IGNORED_GROUPID_ARTIFACTID.add("com.github.javaparser:javaparser-core");
-        IGNORED_GROUPID_ARTIFACTID.add("org.jboss:jandex");
-
-        IGNORED_GROUPIDS.add("antlr");
-        IGNORED_GROUPIDS.add("io.netty");
-        IGNORED_GROUPIDS.add("org.drools");
-        IGNORED_GROUPIDS.add("net.bytebuddy");
-        IGNORED_GROUPIDS.add("io.vertx");
-        IGNORED_GROUPIDS.add("org.hibernate");
-        IGNORED_GROUPIDS.add("org.kie");
-        IGNORED_GROUPIDS.add("org.postgresql");
-        IGNORED_GROUPIDS.add("org.apache.httpcomponents");
-    }
+    private final Set<String> ignoredArtifacts = new HashSet<>();
 
     @Requirement
     private Logger logger;
+
+    public MavenDependencyIndexCreator() {
+        ignoredArtifacts.add("org.graalvm.sdk:graal-sdk");
+        ignoredArtifacts.add("org.yaml:snakeyaml");
+        ignoredArtifacts.add("org.wildfly.common:wildfly-common");
+        ignoredArtifacts.add("com.fasterxml.jackson.core:jackson-core");
+        ignoredArtifacts.add("com.fasterxml.jackson.core:jackson-databind");
+        ignoredArtifacts.add("io.quarkus:quarkus-vertx-http");
+        ignoredArtifacts.add("io.smallrye:smallrye-open-api-core");
+        ignoredArtifacts.add("io.smallrye.reactive:smallrye-mutiny-vertx-core");
+        ignoredArtifacts.add("commons-io:commons-io");
+        ignoredArtifacts.add("io.smallrye.reactive:mutiny");
+        ignoredArtifacts.add("org.jboss.narayana.jta:narayana-jta");
+        ignoredArtifacts.add("org.glassfish.jaxb:jaxb-runtime");
+        ignoredArtifacts.add("com.github.ben-manes.caffeine:caffeine");
+        ignoredArtifacts.add("org.hibernate.validator:hibernate-validator");
+        ignoredArtifacts.add("io.smallrye.config:smallrye-config-core");
+        ignoredArtifacts.add("com.thoughtworks.xstream:xstream");
+        ignoredArtifacts.add("com.github.javaparser:javaparser-core");
+        ignoredArtifacts.add("org.jboss:jandex");
+
+        ignoredArtifacts.add("antlr");
+        ignoredArtifacts.add("io.netty");
+        ignoredArtifacts.add("org.drools");
+        ignoredArtifacts.add("net.bytebuddy");
+        ignoredArtifacts.add("io.vertx");
+        ignoredArtifacts.add("org.hibernate");
+        ignoredArtifacts.add("org.kie");
+        ignoredArtifacts.add("org.postgresql");
+        ignoredArtifacts.add("org.apache.httpcomponents");
+    }
 
     public IndexView createIndex(MavenProject mavenProject, Boolean scanDependenciesDisable,
             List<String> includeDependenciesScopes, List<String> includeDependenciesTypes) throws Exception {
@@ -135,8 +134,8 @@ public class MavenDependencyIndexCreator {
             List<String> includeDependenciesTypes) {
         return !includeDependenciesScopes.contains(artifact.getScope())
                 || !includeDependenciesTypes.contains(artifact.getType())
-                || IGNORED_GROUPIDS.contains(artifact.getGroupId())
-                || IGNORED_GROUPID_ARTIFACTID.contains(artifact.getGroupId() + ":" + artifact.getArtifactId());
+                || ignoredArtifacts.contains(artifact.getGroupId())
+                || ignoredArtifacts.contains(artifact.getGroupId() + ":" + artifact.getArtifactId());
     }
 
     private IndexView timeAndCache(List<Map.Entry<Artifact, Duration>> durations, Artifact artifact,
