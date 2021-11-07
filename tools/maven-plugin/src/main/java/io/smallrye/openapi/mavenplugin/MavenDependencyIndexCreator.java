@@ -11,7 +11,6 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
@@ -39,7 +38,7 @@ public class MavenDependencyIndexCreator {
     private static final Set<String> IGNORED_GROUPIDS = new HashSet<>();
     private static final Set<String> IGNORED_GROUPID_ARTIFACTID = new HashSet<>();
 
-    private final Cache<CacheKey, IndexView> indexCache = CacheBuilder.newBuilder().build();
+    private final Cache<String, IndexView> indexCache = CacheBuilder.newBuilder().build();
 
     static {
         IGNORED_GROUPID_ARTIFACTID.add("org.graalvm.sdk:graal-sdk");
@@ -80,59 +79,59 @@ public class MavenDependencyIndexCreator {
     public IndexView createIndex(MavenProject mavenProject, Boolean scanDependenciesDisable,
             List<String> includeDependenciesScopes, List<String> includeDependenciesTypes)
             throws MojoExecutionException, ExecutionException {
-        CacheKey cacheKey = new CacheKey();
-        cacheKey.projectGroupId = mavenProject.getGroupId();
-        cacheKey.projectArtifactId = mavenProject.getArtifactId();
-        cacheKey.scanDependenciesDisable = scanDependenciesDisable;
-        cacheKey.includeDependenciesScopes = includeDependenciesScopes;
-        cacheKey.includeDependenciesTypes = includeDependenciesTypes;
 
-        return indexCache.get(cacheKey, () -> {
-            IndexView moduleIndex;
+        IndexView moduleIndex = indexCache.get(buildGAVCTString(mavenProject.getArtifact()), () -> {
             try {
-                moduleIndex = indexModuleClasses(mavenProject);
+                return indexModuleClasses(mavenProject);
             } catch (IOException e) {
                 throw new MojoExecutionException("Can't compute index", e);
             }
+        });
 
-            if (scanDependenciesDisable != null && !scanDependenciesDisable) {
-                return moduleIndex;
-            }
+        if (scanDependenciesDisable != null && !scanDependenciesDisable) {
+            return moduleIndex;
+        }
 
-            List<IndexView> indexes = new ArrayList<>();
-            indexes.add(moduleIndex);
-            List<Map.Entry<Artifact, Duration>> durations = new ArrayList<>();
-            for (Artifact artifact : mavenProject.getArtifacts()) {
-                if (includeDependenciesScopes.contains(artifact.getScope())
-                        && includeDependenciesTypes.contains(artifact.getType())
-                        && !IGNORED_GROUPIDS.contains(artifact.getGroupId())
-                        && !IGNORED_GROUPID_ARTIFACTID.contains(artifact.getGroupId() + ":" + artifact.getArtifactId())) {
+        List<IndexView> indexes = new ArrayList<>();
+        indexes.add(moduleIndex);
+        List<Map.Entry<Artifact, Duration>> durations = new ArrayList<>();
+        for (Artifact artifact : mavenProject.getArtifacts()) {
+            if (includeDependenciesScopes.contains(artifact.getScope())
+                    && includeDependenciesTypes.contains(artifact.getType())
+                    && !IGNORED_GROUPIDS.contains(artifact.getGroupId())
+                    && !IGNORED_GROUPID_ARTIFACTID.contains(artifact.getGroupId() + ":" + artifact.getArtifactId())) {
 
+                IndexView artifactIndex = indexCache.get(buildGAVCTString(mavenProject.getArtifact()), () -> {
                     LocalDateTime start = LocalDateTime.now();
-
                     try {
                         Result result = JarIndexer.createJarIndex(artifact.getFile(), new Indexer(),
                                 false, false, false);
                         indexes.add(result.getIndex());
+                        LocalDateTime end = LocalDateTime.now();
+                        durations.add(new AbstractMap.SimpleEntry<>(artifact, Duration.between(start, end)));
+
+                        return result.getIndex();
                     } catch (Exception e) {
                         logger.error("Can't compute index of " + artifact.getFile().getAbsolutePath() + ", skipping", e);
+                        return null;
                     }
+                });
 
-                    LocalDateTime end = LocalDateTime.now();
-                    durations.add(new AbstractMap.SimpleEntry<>(artifact, Duration.between(start, end)));
+                if (artifactIndex != null) {
+                    indexes.add(artifactIndex);
                 }
             }
+        }
 
-            if (logger.isDebugEnabled()) {
-                durations.sort(Map.Entry.comparingByValue());
+        if (logger.isDebugEnabled()) {
+            durations.sort(Map.Entry.comparingByValue());
 
-                durations.forEach(e -> {
-                    logger.debug(e.getKey().getGroupId() + ":" + e.getKey().getArtifactId() + " " + e.getValue());
-                });
-            }
+            durations.forEach(e -> {
+                logger.debug(buildGAVCTString(e.getKey()) + " " + e.getValue());
+            });
+        }
 
-            return CompositeIndex.create(indexes);
-        });
+        return CompositeIndex.create(indexes);
     }
 
     // index the classes of this Maven module
@@ -151,31 +150,15 @@ public class MavenDependencyIndexCreator {
         return indexer.complete();
     }
 
-    private static class CacheKey {
-        Boolean scanDependenciesDisable;
-        List<String> includeDependenciesScopes;
-        List<String> includeDependenciesTypes;
-
-        String projectArtifactId;
-        String projectGroupId;
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o)
-                return true;
-            if (o == null || getClass() != o.getClass())
-                return false;
-            CacheKey cacheKey = (CacheKey) o;
-            return Objects.equals(scanDependenciesDisable, cacheKey.scanDependenciesDisable)
-                    && includeDependenciesScopes.equals(cacheKey.includeDependenciesScopes)
-                    && includeDependenciesTypes.equals(cacheKey.includeDependenciesTypes)
-                    && projectArtifactId.equals(cacheKey.projectArtifactId) && projectGroupId.equals(cacheKey.projectGroupId);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(scanDependenciesDisable, includeDependenciesScopes, includeDependenciesTypes, projectArtifactId,
-                    projectGroupId);
-        }
+    private String buildGAVCTString(Artifact artifact) {
+        return artifact.getGroupId() +
+                ":" +
+                artifact.getArtifactId() +
+                ":" +
+                artifact.getVersion() +
+                ":" +
+                artifact.getClassifier() +
+                ":" +
+                artifact.getType();
     }
 }
