@@ -123,7 +123,7 @@ public class MavenDependencyIndexCreator {
             indexDurations.sort(Map.Entry.comparingByValue());
 
             indexDurations.forEach(e -> {
-                if (!e.getValue().isZero()) {
+                if (e.getValue().toMillis() > 25) {
                     logger.debug(buildGAVCTString(e.getKey()) + " " + e.getValue());
                 }
             });
