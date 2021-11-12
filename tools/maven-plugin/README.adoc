@@ -85,3 +85,5 @@ All properties from the SmallRye OpenAPI Implementation is supported. Properties
   - `METHOD` - The method name is used as operationId.
   - `CLASS_METHOD` - The class name and method name is used as operationId.
   - `PACKAGE_CLASS_METHOD` - The fully qualified class name and method name is used as operationId.
+- `scanAnnotations` (List<String>) - Fully qualified names of annotations that explicitly include an operation. All operations have to have one of these annotations.
+- `scanExcludeAnnotations` (List<String>) - Fully qualified names of annotations that explicitly exclude an operation. If configured, any operation with of these annotations is excluded.

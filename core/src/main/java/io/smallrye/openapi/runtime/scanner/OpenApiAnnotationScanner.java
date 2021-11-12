@@ -4,20 +4,27 @@ import java.lang.reflect.InvocationTargetException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import org.eclipse.microprofile.openapi.models.Components;
+import org.eclipse.microprofile.openapi.models.Extensible;
 import org.eclipse.microprofile.openapi.models.OpenAPI;
+import org.eclipse.microprofile.openapi.models.Operation;
+import org.eclipse.microprofile.openapi.models.PathItem;
 import org.eclipse.microprofile.openapi.models.Paths;
 import org.eclipse.microprofile.openapi.models.tags.Tag;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
+import org.jboss.jandex.DotName;
 import org.jboss.jandex.IndexView;
 import org.jboss.jandex.Type;
 
@@ -128,10 +135,66 @@ public class OpenApiAnnotationScanner {
             }
         }
 
+        processProfiles(openApi);
+
         sortTags(annotationScannerContext, openApi);
         sortMaps(openApi);
 
         return openApi;
+    }
+
+    private void processProfiles(OpenAPI openApi) {
+        Map<String, PathItem> pathItems = openApi.getPaths().getPathItems();
+        if (pathItems != null && pathItems.isEmpty()) {
+            Map<String, PathItem> keep = new HashMap<>();
+            pathItems.forEach((path, pathItem) -> {
+                pathItem.getOperations().forEach((method, operation) -> {
+                    if (!processExtensionProfiles(pathItem, operation)) {
+                        pathItem.setOperation(method, null);
+                    }
+                });
+
+                if (!pathItem.getOperations().isEmpty()) {
+                    keep.put(path, pathItem);
+                }
+            });
+
+            openApi.getPaths().setPathItems(!keep.isEmpty() ? keep : null);
+        }
+    }
+
+    private boolean processExtensionProfiles(Extensible<?>... extensibles) {
+        String profilePrefix = "x-smallrye-profile-";
+
+        Set<String> profiles = new HashSet<>();
+        for (Extensible<?> extensible : extensibles) {
+            Map<String, Object> extensions = extensible.getExtensions();
+            if (extensions == null || extensions.isEmpty()) {
+                continue;
+            }
+
+            Map<String, Object> keep = new HashMap<>();
+            extensions.forEach((name, extension) -> {
+                if (name.startsWith(profilePrefix)) {
+                    profiles.add(name.substring(profilePrefix.length()));
+                    return;
+                }
+
+                keep.put(name,extension);
+            });
+            extensible.setExtensions(!keep.isEmpty() ? keep : null);
+        }
+
+        return profileIncluded(profiles);
+    }
+
+    private boolean profileIncluded(Set<String> profiles) {
+        OpenApiConfig config = annotationScannerContext.getConfig();
+        if (!config.getScanExcludeProfiles().isEmpty()) {
+            return config.getScanExcludeProfiles().stream().noneMatch(profiles::contains);
+        }
+
+        return config.getScanProfiles().stream().anyMatch(profiles::contains);
     }
 
     private OpenAPI scanMicroProfileOpenApiAnnotations() {

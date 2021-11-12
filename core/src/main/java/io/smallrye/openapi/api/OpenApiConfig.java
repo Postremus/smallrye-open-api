@@ -10,6 +10,7 @@ import java.util.stream.Collectors;
 
 import io.smallrye.openapi.api.constants.JsonbConstants;
 import io.smallrye.openapi.api.constants.OpenApiConstants;
+import org.jboss.jandex.DotName;
 
 /**
  * Accessor to OpenAPI configuration options.
@@ -154,6 +155,14 @@ public interface OpenApiConfig {
 
     default Optional<Boolean> allowNakedPathParameter() {
         return Optional.empty();
+    }
+
+    default Set<String> getScanProfiles() {
+        return new HashSet<>();
+    }
+
+    default Set<String> getScanExcludeProfiles() {
+        return new HashSet<>();
     }
 
     default void doAllowNakedPathParameter() {

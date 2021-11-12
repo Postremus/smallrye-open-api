@@ -2,6 +2,7 @@ package io.smallrye.openapi.runtime.io.operation;
 
 import org.eclipse.microprofile.openapi.models.Operation;
 import org.jboss.jandex.AnnotationInstance;
+import org.jboss.jandex.DotName;
 import org.jboss.jandex.MethodInfo;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -106,7 +107,7 @@ public class OperationReader {
     }
 
     // Helpers for scanner classes
-    public static boolean operationIsHidden(final MethodInfo method) {
+    public static boolean operationIsHidden(final AnnotationScannerContext context, final MethodInfo method) {
         AnnotationInstance operationAnnotation = method.annotation(OperationConstant.DOTNAME_OPERATION);
         if (operationAnnotation != null) {
             // If the operation is marked as hidden, just bail here because we don't want it as part of the model.
