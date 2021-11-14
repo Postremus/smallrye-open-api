@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
 
 import org.eclipse.microprofile.openapi.models.Components;
 import org.eclipse.microprofile.openapi.models.OpenAPI;
@@ -295,7 +296,7 @@ public interface AnnotationScanner {
     default Optional<Operation> processOperation(final AnnotationScannerContext context,
             final ClassInfo resourceClass,
             final MethodInfo method) {
-        if (OperationReader.operationIsHidden(method)) {
+        if (OperationReader.operationIsHidden(context, method)) {
             return Optional.empty();
         }
         AnnotationInstance operationAnnotation = OperationReader.getOperationAnnotation(method);
