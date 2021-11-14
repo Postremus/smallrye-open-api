@@ -3,13 +3,11 @@ package io.smallrye.openapi.mavenplugin;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 import org.eclipse.microprofile.openapi.OASConfig;
 
 import io.smallrye.openapi.api.OpenApiConfig;
 import io.smallrye.openapi.api.constants.OpenApiConstants;
-import org.jboss.jandex.DotName;
 
 /**
  * Implementation of the {@link OpenApiConfig} interface that gets config information from maven
@@ -150,11 +148,11 @@ public class MavenConfig implements OpenApiConfig {
 
     @Override
     public Set<String> getScanProfiles() {
-       return asCsvSet(properties.getOrDefault(OpenApiConstants.SCAN_PROFILES, null));
+       return asCsvSet(properties.getOrDefault(OpenApiConstants.PROFILES, null));
     }
 
     @Override
     public Set<String> getScanExcludeProfiles() {
-       return asCsvSet(properties.getOrDefault(OpenApiConstants.SCAN_EXCLUDE_PROFILES, null));
+       return asCsvSet(properties.getOrDefault(OpenApiConstants.EXCLUDE_PROFILES, null));
     }
 }

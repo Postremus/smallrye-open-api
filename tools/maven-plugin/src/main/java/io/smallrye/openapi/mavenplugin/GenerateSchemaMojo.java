@@ -215,14 +215,14 @@ public class GenerateSchemaMojo extends AbstractMojo {
      * Fully qualified names of annotations that explicitly include an operation. All operations have to have one of these
      * annotations.
      */
-    @Parameter(property = "scanProfiles")
-    private List<String> scanProfiles;
+    @Parameter(property = "profiles")
+    private List<String> profiles;
 
     /**
      * Profiles which exclude operations.
      */
-    @Parameter(property = "scanExcludeProfiles")
-    private List<String> scanExcludeProfiles;
+    @Parameter(property = "xcludeProfiles")
+    private List<String> excludeProfiles;
 
     @Component
     private MavenDependencyIndexCreator mavenDependencyIndexCreator;
@@ -382,8 +382,8 @@ public class GenerateSchemaMojo extends AbstractMojo {
         addToPropertyMap(cp, OpenApiConstants.INFO_LICENSE_NAME, infoLicenseName);
         addToPropertyMap(cp, OpenApiConstants.INFO_LICENSE_URL, infoLicenseUrl);
         addToPropertyMap(cp, OpenApiConstants.OPERATION_ID_STRAGEGY, operationIdStrategy);
-        addToPropertyMap(cp, OpenApiConstants.SCAN_PROFILES, scanProfiles);
-        addToPropertyMap(cp, OpenApiConstants.SCAN_EXCLUDE_PROFILES, scanExcludeProfiles);
+        addToPropertyMap(cp, OpenApiConstants.PROFILES, profiles);
+        addToPropertyMap(cp, OpenApiConstants.EXCLUDE_PROFILES, excludeProfiles);
 
         return cp;
     }

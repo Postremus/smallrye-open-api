@@ -144,9 +144,14 @@ public class OpenApiAnnotationScanner {
     }
 
     private void processProfiles(OpenAPI openApi) {
-        Map<String, PathItem> pathItems = openApi.getPaths().getPathItems();
-        if (pathItems != null && pathItems.isEmpty()) {
-            Map<String, PathItem> keep = new HashMap<>();
+        Paths paths = openApi.getPaths();
+        if (paths == null) {
+            return;
+        }
+        Map<String, PathItem> original = paths.getPathItems();
+
+        if (original != null && !original.isEmpty()) {
+            Map<String, PathItem> pathItems = new HashMap<>(original);
             pathItems.forEach((path, pathItem) -> {
                 pathItem.getOperations().forEach((method, operation) -> {
                     if (!processExtensionProfiles(pathItem, operation)) {
@@ -154,35 +159,31 @@ public class OpenApiAnnotationScanner {
                     }
                 });
 
-                if (!pathItem.getOperations().isEmpty()) {
-                    keep.put(path, pathItem);
+                if (pathItem.getOperations().isEmpty()) {
+                    paths.removePathItem(path);
                 }
             });
-
-            openApi.getPaths().setPathItems(!keep.isEmpty() ? keep : null);
         }
     }
 
     private boolean processExtensionProfiles(Extensible<?>... extensibles) {
-        String profilePrefix = "x-smallrye-profile-";
-
         Set<String> profiles = new HashSet<>();
         for (Extensible<?> extensible : extensibles) {
             Map<String, Object> extensions = extensible.getExtensions();
             if (extensions == null || extensions.isEmpty()) {
                 continue;
             }
+            extensions = new HashMap<>(extensions);
 
-            Map<String, Object> keep = new HashMap<>();
-            extensions.forEach((name, extension) -> {
-                if (name.startsWith(profilePrefix)) {
-                    profiles.add(name.substring(profilePrefix.length()));
-                    return;
+            for (String name : extensions.keySet()) {
+                if (!name.startsWith(OpenApiConstants.PROFILE_EXTENSION_PREFIX)) {
+                    continue;
                 }
 
-                keep.put(name,extension);
-            });
-            extensible.setExtensions(!keep.isEmpty() ? keep : null);
+                String profile = name.substring(OpenApiConstants.PROFILE_EXTENSION_PREFIX.length());
+                profiles.add(profile);
+                extensible.removeExtension(name);
+            }
         }
 
         return profileIncluded(profiles);
@@ -192,6 +193,10 @@ public class OpenApiAnnotationScanner {
         OpenApiConfig config = annotationScannerContext.getConfig();
         if (!config.getScanExcludeProfiles().isEmpty()) {
             return config.getScanExcludeProfiles().stream().noneMatch(profiles::contains);
+        }
+
+        if (config.getScanProfiles().isEmpty()) {
+            return true;
         }
 
         return config.getScanProfiles().stream().anyMatch(profiles::contains);

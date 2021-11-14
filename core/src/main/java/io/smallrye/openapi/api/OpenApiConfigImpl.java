@@ -11,7 +11,6 @@ import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.openapi.OASConfig;
 
 import io.smallrye.openapi.api.constants.OpenApiConstants;
-import org.jboss.jandex.DotName;
 
 /**
  * Implementation of the {@link OpenApiConfig} interface that gets config information from a
@@ -414,9 +413,9 @@ public class OpenApiConfigImpl implements OpenApiConfig {
     @Override
     public Set<String> getScanProfiles() {
         if (scanProfiles == null) {
-            String classes = getStringConfigValue(OpenApiConstants.SCAN_PROFILES);
+            String classes = getStringConfigValue(OpenApiConstants.PROFILES);
             if (classes == null) {
-                classes = getStringConfigValue(OpenApiConstants.SCAN_PROFILES);
+                classes = getStringConfigValue(OpenApiConstants.PROFILES);
             }
             scanProfiles = asCsvSet(classes);
         }
@@ -426,9 +425,9 @@ public class OpenApiConfigImpl implements OpenApiConfig {
     @Override
     public Set<String> getScanExcludeProfiles() {
         if (scanExcludeProfiles == null) {
-            String classes = getStringConfigValue(OpenApiConstants.SCAN_EXCLUDE_PROFILES);
+            String classes = getStringConfigValue(OpenApiConstants.EXCLUDE_PROFILES);
             if (classes == null) {
-                classes = getStringConfigValue(OpenApiConstants.SCAN_EXCLUDE_PROFILES);
+                classes = getStringConfigValue(OpenApiConstants.EXCLUDE_PROFILES);
             }
             scanExcludeProfiles = asCsvSet(classes);
         }

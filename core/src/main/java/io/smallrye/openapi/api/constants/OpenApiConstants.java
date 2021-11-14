@@ -56,8 +56,8 @@ public final class OpenApiConstants {
     public static final String OPERATION_ID_STRAGEGY = SMALLRYE_PREFIX + "operationIdStrategy";
     public static final String DEFAULT_PRODUCES = SMALLRYE_PREFIX + "defaultProduces";
     public static final String DEFAULT_CONSUMES = SMALLRYE_PREFIX + "defaultConsumes";
-    public static final String SCAN_PROFILES = SMALLRYE_PREFIX + "scan.profiles";
-    public static final String SCAN_EXCLUDE_PROFILES = SMALLRYE_PREFIX + "scan.exclude.profiles";
+    public static final String PROFILES = SMALLRYE_PREFIX + "scan.profiles";
+    public static final String EXCLUDE_PROFILES = SMALLRYE_PREFIX + "scan.exclude.profiles";
 
     /**
      * Set of classes which should never be scanned, regardless of user configuration.
@@ -109,6 +109,8 @@ public final class OpenApiConstants {
     public static final Supplier<String[]> DEFAULT_MEDIA_TYPES = () -> new String[] { "*/*" };
     // Used by both Jax-rs and openapi
     public static final String REF = "ref";
+
+    public static final String PROFILE_EXTENSION_PREFIX = "x-smallrye-profile-";
 
     /**
      * Constructor.

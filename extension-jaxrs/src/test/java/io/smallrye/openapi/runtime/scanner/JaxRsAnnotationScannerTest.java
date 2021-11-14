@@ -402,7 +402,7 @@ class JaxRsAnnotationScannerTest extends JaxRsDataObjectScannerTestBase {
     @Test
     void testIncludeProfile() {
         Index index = indexOf(ProfileResource.class);
-        OpenApiConfig config = dynamicConfig(OpenApiConstants.SCAN_PROFILES,
+        OpenApiConfig config = dynamicConfig(OpenApiConstants.PROFILES,
                 "external");
 
         OpenApiAnnotationScanner scanner = new OpenApiAnnotationScanner(config, index);
@@ -416,7 +416,7 @@ class JaxRsAnnotationScannerTest extends JaxRsDataObjectScannerTestBase {
     @Test
     void testExcludeProfile() {
         Index index = indexOf(ProfileResource.class);
-        OpenApiConfig config = dynamicConfig(OpenApiConstants.SCAN_EXCLUDE_PROFILES,
+        OpenApiConfig config = dynamicConfig(OpenApiConstants.EXCLUDE_PROFILES,
                 "external");
 
         OpenApiAnnotationScanner scanner = new OpenApiAnnotationScanner(config, index);
@@ -448,8 +448,8 @@ class JaxRsAnnotationScannerTest extends JaxRsDataObjectScannerTestBase {
 
     @Test
     void testIncludeProfilePath() {
-        Index index = indexOf(Object.class);
-        OpenApiConfig config = dynamicConfig(OpenApiConstants.SCAN_PROFILES,
+        Index index = indexOf(ProfilePathWithProfileResource.class, ProfilePathResource.class);
+        OpenApiConfig config = dynamicConfig(OpenApiConstants.PROFILES,
                 "external");
 
         OpenApiAnnotationScanner scanner = new OpenApiAnnotationScanner(config, index);
@@ -464,7 +464,7 @@ class JaxRsAnnotationScannerTest extends JaxRsDataObjectScannerTestBase {
     @Test
     void testExcludeProfilePath() {
         Index index = indexOf(ProfilePathWithProfileResource.class, ProfilePathResource.class);
-        OpenApiConfig config = dynamicConfig(OpenApiConstants.SCAN_EXCLUDE_PROFILES,
+        OpenApiConfig config = dynamicConfig(OpenApiConstants.EXCLUDE_PROFILES,
                 "external");
 
         OpenApiAnnotationScanner scanner = new OpenApiAnnotationScanner(config, index);
