@@ -83,7 +83,7 @@ public class DataObjectDeque {
             Type type,
             Schema schema) {
 
-        validateInput(parentPathEntry, type, schema);
+        DataObjectValidationUtil.validateNotNull(parentPathEntry, type, schema);
         PathEntry entry = leafNode(parentPathEntry, annotationTarget, type, schema);
         ClassInfo klazzInfo = entry.getClazz();
         if (parentPathEntry.hasParent(entry)) {
@@ -147,7 +147,7 @@ public class DataObjectDeque {
                 ClassInfo clazz,
                 Type clazzType,
                 Schema schema) {
-            validateInput(clazz, clazzType, schema);
+            DataObjectValidationUtil.validateNotNull(clazz, clazzType, schema);
             this.enclosing = enclosing;
             this.annotationTarget = annotationTarget;
             this.clazz = clazz;
@@ -240,13 +240,6 @@ public class DataObjectDeque {
                     "clazz=" + clazz +
                     ", schema=" + schema +
                     ", parent=" + (enclosing != null ? enclosing.toStringWithGraph() : "<root>") + "}";
-        }
-    }
-
-    private static void validateInput(Object... input) {
-        for (Object t : input) {
-            if (t == null)
-                throw DataObjectMessages.msg.notNull();
         }
     }
 }
