@@ -183,8 +183,8 @@ public class FilteredIndexView implements IndexView {
     private static String longestPrefixMatch(String name, Set<String> prefixes) {
         String longestPrefix = "";
         for (String prefix : prefixes) {
-            if (name.startsWith(prefix)) {
-                if (prefix.length() > longestPrefix.length()) {
+            if (prefix.length() > longestPrefix.length()) {
+                if (name.startsWith(prefix)) {
                     longestPrefix = prefix;
                 }
             }
@@ -202,8 +202,8 @@ public class FilteredIndexView implements IndexView {
     private static String longestSuffixMatch(String name, Set<String> suffixes) {
         String longestSuffix = "";
         for (String suffix : suffixes) {
-            if (name.endsWith(suffix)) {
-                if (suffix.length() > longestSuffix.length()) {
+            if (suffix.length() > longestSuffix.length()) {
+                if (name.endsWith(suffix)) {
                     longestSuffix = suffix;
                 }
             }
@@ -236,17 +236,15 @@ public class FilteredIndexView implements IndexView {
     /**
      * Returns the longest argument
      *
-     * @param strings an array of strings
+     * @param value1 an array of strings
+     * @param value2 an array of strings
      * @return the longest element of {@code strings}
      */
-    private static String longest(String... strings) {
-        String longest = "";
-        for (String string : strings) {
-            if (string.length() > longest.length()) {
-                longest = string;
-            }
+    private static String longest(String value1, String value2) {
+        if (value1.length() < value2.length()) {
+            return value1;
         }
-        return longest;
+        return value2;
     }
 
     /**
