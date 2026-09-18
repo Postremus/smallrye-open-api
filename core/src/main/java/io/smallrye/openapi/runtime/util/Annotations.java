@@ -176,7 +176,7 @@ public final class Annotations {
 
         Collection<AnnotationInstance> composed = Collections.emptyList();
         if (composedSearchCandidates.contains(name)) {
-            composed = getComposedAnnotation(declaredAnnotations(target), name, scanned != null ? scanned : new HashSet<>());
+            composed = getComposedAnnotation(declaredAnnotations(target), name, scanned);
         }
 
         if (composed.isEmpty()) {
@@ -201,7 +201,7 @@ public final class Annotations {
         if (!isPresent(name)) {
             return Collections.emptyList();
         }
-        return getDeclaredAnnotation(target, name, null);
+        return getDeclaredAnnotation(target, name, new HashSet<>());
     }
 
     /**
