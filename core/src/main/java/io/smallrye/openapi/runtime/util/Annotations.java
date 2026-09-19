@@ -65,7 +65,7 @@ public final class Annotations {
     private final Set<DotName> composedSearchCandidates;
 
     /**
-     * Whether any annotation with a given name is used in the index, determined once per name.
+     * Whether any annotation with a given name is used in the index, determined once per name. Cached since the result of {@link io.smallrye.openapi.runtime.scanner.FilteredIndexView#containsAnnotation(DotName)} is expensive to compute when Composite Indexes are used.
      */
     private final Map<DotName, Boolean> annotationsInIndex = new HashMap<>();
 
@@ -198,25 +198,20 @@ public final class Annotations {
     }
 
     private List<AnnotationInstance> getDeclaredAnnotation(AnnotationTarget target, DotName name) {
-        if (!isPresent(name)) {
+        if (!annotationPresentInIndex(name)) {
             return Collections.emptyList();
         }
         return getDeclaredAnnotation(target, name, new HashSet<>());
     }
 
     /**
-     * Determine whether any annotation with the given name is used in the index. Annotations that are
-     * not present need not be searched for on individual targets.
+     * Determine whether any annotation with the given name is used in the index.
      */
-    private boolean isPresent(DotName annotationName) {
-        if (annotationName == null) {
-            return false;
-        }
-
+    private boolean annotationPresentInIndex(DotName annotationName) {
         Boolean present = annotationsInIndex.get(annotationName);
 
         if (present == null) {
-            present = !context.getIndex().getAnnotations(annotationName).isEmpty();
+            present = context.getIndex().containsAnnotation(annotationName);
             annotationsInIndex.put(annotationName, present);
         }
 
@@ -378,7 +373,7 @@ public final class Annotations {
             DotName singleAnnotationName,
             DotName repeatableAnnotationName) {
 
-        if (!isPresent(repeatableAnnotationName)) {
+        if (!annotationPresentInIndex(repeatableAnnotationName)) {
             return new ArrayList<>(getDeclaredAnnotation(target, singleAnnotationName));
         }
 
@@ -405,7 +400,7 @@ public final class Annotations {
     public AnnotationInstance getMethodParameterAnnotation(MethodInfo method, int parameterIndex,
             DotName annotationName) {
 
-        if (!isPresent(annotationName)) {
+        if (!annotationPresentInIndex(annotationName)) {
             return null;
         }
 
