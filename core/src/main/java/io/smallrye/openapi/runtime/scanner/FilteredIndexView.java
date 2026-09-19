@@ -42,6 +42,9 @@ public class FilteredIndexView implements IndexView {
      * @param delegate the original (to be wrapped) index
      * @param config the config
      */
+    boolean anyClassConfigured;
+    boolean anyPackagesConfigured;
+
     public FilteredIndexView(IndexView delegate, OpenApiConfig config) {
         this.delegate = delegate;
 
@@ -63,6 +66,12 @@ public class FilteredIndexView implements IndexView {
 
         anyIncludesConfigured = !scanClasses.isEmpty() || !scanClassesPatterns.isEmpty() || !scanPackages.isEmpty()
                 || !scanPackagesPatterns.isEmpty();
+
+        anyClassConfigured = !scanClasses.isEmpty() || !scanClassesPatterns.isEmpty() || !scanExcludeClasses.isEmpty()
+                || !scanExcludeClassesPatterns.isEmpty();
+        anyPackagesConfigured = !scanPackages.isEmpty() || !scanPackagesPatterns.isEmpty() || !scanExcludePackages.isEmpty()
+                || !scanExcludePackagesPatterns.isEmpty();
+
     }
 
     private static void processConfigStrings(Set<String> inputs, Set<String> strings, Set<Pattern> patterns) {
@@ -108,62 +117,68 @@ public class FilteredIndexView implements IndexView {
     public boolean accepts(DotName className, boolean allowImpliedInclusion) {
 
         String fqcn = className.toString();
-        String simpleName = className.withoutPackagePrefix();
-        int index = fqcn.lastIndexOf('.');
-        String packageName = index > -1 ? fqcn.substring(0, index) : "";
 
-        // Check for an exact class name match in the exclude list
-        if (scanExcludeClasses.contains(fqcn)) {
-            return false;
+        if (anyClassConfigured) {
+            String simpleName = className.withoutPackagePrefix();
+
+            // Check for an exact class name match in the exclude list
+            if (scanExcludeClasses.contains(fqcn)) {
+                return false;
+            }
+
+            // Check for an exact class name match in the include list
+            if (scanClasses.contains(fqcn)) {
+                return true;
+            }
+
+            // Find the longest entry from the class exclude list which is a suffix of the fqcn and includes the full simple class name
+            String simpleNameExcludeMatch = longestSuffixMatch(fqcn, scanExcludeClasses);
+            if (!simpleNameExcludeMatch.endsWith(simpleName)) {
+                simpleNameExcludeMatch = "";
+            }
+            // Find the longest regex match from the class exclude list
+            simpleNameExcludeMatch = longest(simpleNameExcludeMatch, longestRegexMatch(fqcn, scanExcludeClassesPatterns));
+
+            // Find the longest entry from the class include list which is a suffix of the fqcn and includes the full simple class name
+            String simpleNameIncludeMatch = longestSuffixMatch(fqcn, scanClasses);
+            if (!simpleNameIncludeMatch.endsWith(simpleName)) {
+                simpleNameIncludeMatch = "";
+            }
+            // Find the longest regex match from the class include list
+            simpleNameIncludeMatch = longest(simpleNameIncludeMatch, longestRegexMatch(fqcn, scanClassesPatterns));
+
+            if (simpleNameExcludeMatch.length() > 0 && simpleNameExcludeMatch.length() >= simpleNameIncludeMatch.length()) {
+                // There is an exclude match and it's more complete than any include match
+                return false;
+            }
+
+            if (simpleNameIncludeMatch.length() > 0) {
+                // There is an include match
+                return true;
+            }
         }
 
-        // Check for an exact class name match in the include list
-        if (scanClasses.contains(fqcn)) {
-            return true;
-        }
+        if (anyPackagesConfigured) {
+            // Length of the package name within fqcn, 0 for the default package
+            int packageLength = Math.max(fqcn.lastIndexOf('.'), 0);
 
-        // Find the longest entry from the class exclude list which is a suffix of the fqcn and includes the full simple class name
-        String simpleNameExcludeMatch = longestSuffixMatch(fqcn, scanExcludeClasses);
-        if (!simpleNameExcludeMatch.endsWith(simpleName)) {
-            simpleNameExcludeMatch = "";
-        }
-        // Find the longest regex match from the class exclude list
-        simpleNameExcludeMatch = longest(simpleNameExcludeMatch, longestRegexMatch(fqcn, scanExcludeClassesPatterns));
+            // Find the longest string prefix match or regex match from the include package list
+            int packageIncludeMatch = Math.max(longestPrefixMatch(fqcn, packageLength, scanPackages),
+                    longestRegexMatch(fqcn, packageLength, scanPackagesPatterns));
 
-        // Find the longest entry from the class include list which is a suffix of the fqcn and includes the full simple class name
-        String simpleNameIncludeMatch = longestSuffixMatch(fqcn, scanClasses);
-        if (!simpleNameIncludeMatch.endsWith(simpleName)) {
-            simpleNameIncludeMatch = "";
-        }
-        // Find the longest regex match from the class include list
-        simpleNameIncludeMatch = longest(simpleNameIncludeMatch, longestRegexMatch(fqcn, scanClassesPatterns));
+            // Find the longest string prefix match or regex match from the exclude package list
+            int packageExcludeMatch = Math.max(longestPrefixMatch(fqcn, packageLength, scanExcludePackages),
+                    longestRegexMatch(fqcn, packageLength, scanExcludePackagesPatterns));
 
-        if (simpleNameExcludeMatch.length() > 0 && simpleNameExcludeMatch.length() >= simpleNameIncludeMatch.length()) {
-            // There is an exclude match and it's more complete than any include match
-            return false;
-        }
+            if (packageExcludeMatch > 0 && packageExcludeMatch >= packageIncludeMatch) {
+                // There is a package exclude match and it's more complete than any include match
+                return false;
+            }
 
-        if (simpleNameIncludeMatch.length() > 0) {
-            // There is an include match
-            return true;
-        }
-
-        // Find the longest string prefix match or regex match from the include package list
-        String packageIncludeMatch = longest(longestPrefixMatch(packageName, scanPackages),
-                longestRegexMatch(packageName, scanPackagesPatterns));
-
-        // Find the longest string prefix match or regex match from the exclude package list
-        String packageExcludeMatch = longest(longestPrefixMatch(packageName, scanExcludePackages),
-                longestRegexMatch(packageName, scanExcludePackagesPatterns));
-
-        if (packageExcludeMatch.length() > 0 && packageExcludeMatch.length() >= packageIncludeMatch.length()) {
-            // There is a package exclude match and it's more complete than any include match
-            return false;
-        }
-
-        if (packageIncludeMatch.length() > 0) {
-            // There is a package include match
-            return true;
+            if (packageIncludeMatch > 0) {
+                // There is a package include match
+                return true;
+            }
         }
 
         if (allowImpliedInclusion && !anyIncludesConfigured) {
@@ -174,19 +189,21 @@ public class FilteredIndexView implements IndexView {
     }
 
     /**
-     * Find the longest string from {@code prefixes} which is a prefix of {@code name}
+     * Find the length of the longest string from {@code prefixes} which is a prefix of the first {@code end} characters of
+     * {@code name}
      *
      * @param name the name
+     * @param end the number of leading characters of {@code name} to consider
      * @param prefixes a set of potential prefixes of {@code name}
-     * @return the longest element of {@code prefixes} which is a prefix of {@code name}, or the empty string if there are none
+     * @return the length of the longest element of {@code prefixes} which is a prefix of {@code name.substring(0, end)}, or 0
+     *         if there are none
      */
-    private static String longestPrefixMatch(String name, Set<String> prefixes) {
-        String longestPrefix = "";
+    private static int longestPrefixMatch(String name, int end, Set<String> prefixes) {
+        int longestPrefix = 0;
         for (String prefix : prefixes) {
-            if (name.startsWith(prefix)) {
-                if (prefix.length() > longestPrefix.length()) {
-                    longestPrefix = prefix;
-                }
+            int length = prefix.length();
+            if (length > longestPrefix && length <= end && name.startsWith(prefix)) {
+                longestPrefix = length;
             }
         }
         return longestPrefix;
@@ -200,6 +217,9 @@ public class FilteredIndexView implements IndexView {
      * @return the longest element of {@code suffixes} which is a suffix of {@code name}, or the empty string if there are none
      */
     private static String longestSuffixMatch(String name, Set<String> suffixes) {
+        if (suffixes.isEmpty()) {
+            return "";
+        }
         String longestSuffix = "";
         for (String suffix : suffixes) {
             if (name.endsWith(suffix)) {
@@ -220,6 +240,9 @@ public class FilteredIndexView implements IndexView {
      *         the empty string if no patterns matched
      */
     private static String longestRegexMatch(String name, Set<Pattern> patterns) {
+        if (patterns.isEmpty()) {
+            return "";
+        }
         String longestMatch = "";
         for (Pattern pattern : patterns) {
             Matcher m = pattern.matcher(name);
@@ -228,6 +251,27 @@ public class FilteredIndexView implements IndexView {
                 if (match.length() > longestMatch.length()) {
                     longestMatch = match;
                 }
+            }
+        }
+        return longestMatch;
+    }
+
+    /**
+     * Attempts to find each element of {@code patterns} in the first {@code end} characters of {@code name} and returns the
+     * length of the longest match
+     *
+     * @param name the name to match against
+     * @param end the number of leading characters of {@code name} to consider
+     * @param patterns the patterns to try
+     * @return the length of the longest match of a pattern in {@code name.substring(0, end)}, or 0 if no patterns matched
+     */
+    private static int longestRegexMatch(String name, int end, Set<Pattern> patterns) {
+        int longestMatch = 0;
+        for (Pattern pattern : patterns) {
+            // The region's anchoring (and non-transparent) bounds make this equivalent to matching the substring
+            Matcher m = pattern.matcher(name).region(0, end);
+            if (m.find()) {
+                longestMatch = Math.max(longestMatch, m.end() - m.start());
             }
         }
         return longestMatch;
